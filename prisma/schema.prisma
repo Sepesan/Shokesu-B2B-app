@@ -1,0 +1,172 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CLIENT
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum OrderStatus {
+  APPROVED
+  EXPORTED
+}
+
+enum InterestType {
+  NOTIFY
+}
+
+model User {
+  id            String           @id @default(cuid())
+  name          String?
+  email         String           @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role             @default(CLIENT)
+  invited       Boolean          @default(false)
+  revoked       Boolean          @default(false)
+  accounts      Account[]
+  sessions      Session[]
+  clientPrices  ClientPrice[]
+  requests      Request[]
+  orders        Order[]
+  interests     BottleInterest[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Bottle {
+  id              String           @id @default(cuid())
+  name            String
+  normalizedName  String           @unique
+  description     String?
+  imageUrl        String?
+  galleryImages   String[]         @default([])
+  trelloCardId    String?          @unique
+  inventory       Inventory?
+  requestItems    RequestItem[]
+  orderItems      OrderItem[]
+  interests       BottleInterest[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Inventory {
+  id           String   @id @default(cuid())
+  bottleId     String   @unique
+  qtyAvailable Int      @default(0)
+  basePrice    Decimal? @db.Decimal(10, 2)
+  bottle       Bottle   @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+  updatedAt    DateTime @updatedAt
+}
+
+model ClientPrice {
+  id        String   @id @default(cuid())
+  userId    String
+  bottleId  String
+  price     Decimal  @db.Decimal(10, 2)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bottle    Bottle   @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bottleId])
+}
+
+model Request {
+  id        String        @id @default(cuid())
+  userId    String
+  status    RequestStatus @default(PENDING)
+  items     RequestItem[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model RequestItem {
+  id               String   @id @default(cuid())
+  requestId        String
+  bottleId         String
+  qtyRequested     Int
+  qtyAllocated     Int?
+  request          Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  bottle           Bottle   @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  requestId  String      @unique
+  userId     String
+  status     OrderStatus @default(APPROVED)
+  exportedAt DateTime?
+  items      OrderItem[]
+  request    Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  orderId   String
+  bottleId  String
+  qty       Int
+  unitPrice Decimal  @db.Decimal(10, 2)
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bottle    Bottle   @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+}
+
+model BottleInterest {
+  id        String       @id @default(cuid())
+  userId    String
+  bottleId  String
+  type      InterestType @default(NOTIFY)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bottle    Bottle       @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, bottleId, type])
+}
